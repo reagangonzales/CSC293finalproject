@@ -1,0 +1,179 @@
+---
+title: "EDA"
+author: "Reagan Gonzales & Abril Perez"
+format: html
+editor: visual
+---
+
+# Loading/cleaning Football Data Set
+
+```{r}
+library(nflreadr)
+library(tidyverse)
+football_games <- load_schedules(2020:2023)
+```
+
+I will start by exploring the unique football stadiums in the data set.
+
+```{r}
+# Checking unique football stadiums
+unique(football_games$stadium_id)
+```
+
+Of these stadiums, I can see that the only stadium in LA is SoFi Stadium, so I will filter the data set to focus on games held at this stadium.
+
+```{r}
+# Filter the dataset for games played in SoFi
+la_games <- football_games |> filter(stadium == "SoFi Stadium")
+```
+
+```{r}
+# For my later join, I want to create ????
+game_days <- la_games |>
+  distinct(gameday) |>
+  mutate(game_day = 1)
+```
+
+# Loading/cleaning DV LA Data Set
+
+```{r}
+la_data <- read_csv("Domestic_Violence_Calls_from_2020_to_Present_20250415.csv")
+la_data <- janitor::clean_names(la_data)
+```
+
+```{r}
+head(la_data)
+```
+
+```{r}
+unique(la_data$crm_cd_desc)
+```
+
+I will now filter the data set by crime committed. I want to focus on cases of domestic violence, so I will be filtering by crimes that start with "INTIMATE".
+
+```{r}
+domestic_violence <- la_data |> filter(grepl("INTIMATE", crm_cd_desc, ignore.case = TRUE))
+```
+
+# Joining The Data Sets
+
+I will now join the data sets by date. I will join by my domestic violence data set column "date occured (date_occ)" and football data set column "gameday". Before joining, I need to ensure the columns are the right data type.
+
+```{r}
+# Observing the format of date occured column in domestic violence data set
+head(domestic_violence$date_occ)
+```
+
+```{r}
+# Convert to Date by specifying format and removing time
+domestic_violence$date_occ <- 
+  as.Date(domestic_violence$date_occ, format = "%m/%d/%Y %I:%M:%S %p")
+```
+
+```{r}
+# Observing format of gameday column in football data set
+head(game_days$gameday)
+class(game_days$gameday)
+```
+
+```{r}
+# Convert to Date type
+game_days$gameday <- as.Date(game_days$gameday)
+class(game_days$gameday)
+```
+
+Now that my data types are adjusted, I will join them.
+
+```{r}
+# Joining data sets
+dv_with_games <- domestic_violence |>
+  left_join(game_days, by = c("date_occ" = "gameday")) |>
+  mutate(game_day = ifelse(is.na(game_day), 0, game_day))
+```
+
+# EDA
+
+Now I will conduct EDA on the joined data set.
+
+Q1: What's in my data set?
+
+```{r}
+str(dv_with_games)
+```
+
+I have a joined data set with character, date, logical, and int data types.
+
+Q2: What type of variation occurs within my variables?
+
+Here I'll visualize some of key variables we are looking at
+
+```{r}
+# Game_day variable
+dv_with_games$game_day <- as.logical(dv_with_games$game_day)
+ggplot(data = dv_with_games) +
+  geom_bar(mapping = aes(x = game_day))
+```
+
+```{r}
+# Crime Description variable
+ggplot(data = dv_with_games) +
+  geom_bar(mapping = aes(x = crm_cd_desc))
+```
+
+```{r}
+# Victim's sex variable
+ggplot(data = dv_with_games) +
+  geom_bar(mapping = aes(x = vict_sex))
+```
+
+In my next chunk I created another data frame to easily asses the amount of domestic violence incidents, the date, and whether or not it was a game day or not.
+
+```{r}
+# Creating data set of count of dv reports, grouped by date
+dv_daily <- domestic_violence |>
+  group_by(date_occ) |>
+  summarize(dv_reports = n())
+# Joining data set into our original big data set dv_with_games
+dv_with_games <- dv_with_games |>
+  group_by(date_occ) |>
+  mutate(dv_reports = n())
+```
+
+Q3: Am I missing any data?
+
+```{r}
+summary(dv_with_games)
+```
+
+I am missing data in columns weapon_used_cd, crm_cd_2, crm_cd_3, crm_cd_4
+
+Q4: What type of covariation occurs within my variables?
+
+```{r}
+ggplot(data = dv_with_games, mapping= aes(x = game_day, y = dv_reports)) +
+  geom_boxplot() +
+  labs(x = "Game Day (FALSE = No, TRUE = Yes)", y = "Number of DV Reports", 
+       title = "DV Reports on Non-Game Days vs Game Days")
+```
+
+# Big Questions for our Project
+
+*What question is the project is trying to answer?*
+
+Do NFL games at SoFi Stadium have a measurable effect on the frequency of reported domestic violence incidents in Los Angeles? The project is trying to explore whether the is a statistically significant and potentially predictable relationship between spikes in domestic violence cases and NFL game days.
+
+*How have people answered it / gotten around it before?*
+
+Previously many have relied on using summary stats, like comparing average DV reports on game days vs. non-game days. Most studies seem to want to answer the question "does the outcome of NFL games correlate with spikes in domestic abuse?", using methods such as regression. However they often don't use cross-validation and don't explore unsupervised techniques such as clustering
+
+*What new idea does this project offer that improves on the old way of doing things?*
+
+This project will use regression, but with further use cross-validation and model selection to identify the most predictive and robust models. Time permitted we will also consider unsupervised learning to detect patterns in the data (DV patterns on game days). Also we are narrowing the geographic focus to Los Angeles across multiple seasons (2020-2023), instead of the entire US or world
+
+*What are the (major) building blocks the project will need to be successful?*
+
+The major building blocks I see are completing the cross-validation and model selection. If we're able to possibly clustering.
+
+*Which ones are in place already, and which ones are still under construction or TBD?*
+
+Joining is already taking place, and the methods that we will create to finish our project are still under construction
