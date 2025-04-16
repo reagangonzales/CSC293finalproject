@@ -1,13 +1,13 @@
 ---
 title: "EDA"
 author: "Reagan Gonzales & Abril Perez"
-format: html
+format: pdf
 editor: visual
 ---
 
 # Loading/cleaning Football Data Set
 
-```{r}
+```{r output=FALSE}
 library(nflreadr)
 library(tidyverse)
 football_games <- load_schedules(2020:2023)
@@ -22,13 +22,13 @@ unique(football_games$stadium_id)
 
 Of these stadiums, I can see that the only stadium in LA is SoFi Stadium, so I will filter the data set to focus on games held at this stadium.
 
-```{r}
+```{r output=FALSE}
 # Filter the dataset for games played in SoFi
 la_games <- football_games |> filter(stadium == "SoFi Stadium")
 ```
 
-```{r}
-# For my later join, I want to create ????
+```{r output=FALSE}
+# For my later join
 game_days <- la_games |>
   distinct(gameday) |>
   mutate(game_day = 1)
@@ -36,7 +36,7 @@ game_days <- la_games |>
 
 # Loading/cleaning DV LA Data Set
 
-```{r}
+```{r output=FALSE}
 la_data <- read_csv("Domestic_Violence_Calls_from_2020_to_Present_20250415.csv")
 la_data <- janitor::clean_names(la_data)
 ```
@@ -51,7 +51,7 @@ unique(la_data$crm_cd_desc)
 
 I will now filter the data set by crime committed. I want to focus on cases of domestic violence, so I will be filtering by crimes that start with "INTIMATE".
 
-```{r}
+```{r output=FALSE}
 domestic_violence <- la_data |> filter(grepl("INTIMATE", crm_cd_desc, ignore.case = TRUE))
 ```
 
@@ -64,7 +64,7 @@ I will now join the data sets by date. I will join by my domestic violence data 
 head(domestic_violence$date_occ)
 ```
 
-```{r}
+```{r output=FALSE}
 # Convert to Date by specifying format and removing time
 domestic_violence$date_occ <- 
   as.Date(domestic_violence$date_occ, format = "%m/%d/%Y %I:%M:%S %p")
@@ -84,7 +84,7 @@ class(game_days$gameday)
 
 Now that my data types are adjusted, I will join them.
 
-```{r}
+```{r output=FALSE}
 # Joining data sets
 dv_with_games <- domestic_violence |>
   left_join(game_days, by = c("date_occ" = "gameday")) |>
@@ -105,7 +105,7 @@ I have a joined data set with character, date, logical, and int data types.
 
 Q2: What type of variation occurs within my variables?
 
-Here I'll visualize some of key variables we are looking at
+Here I'll visualize some key variables we are looking at
 
 ```{r}
 # Game_day variable
