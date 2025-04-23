@@ -1,0 +1,67 @@
+---
+title: "Preliminary_model"
+format: html
+editor: visual
+---
+
+# Loading data
+
+```{r}
+# Loading Football Data Set
+library(nflreadr)
+library(tidyverse)
+football_games <- load_schedules(2020:2023)
+# Filter the dataset for games played in SoFi
+la_games <- football_games |> filter(stadium == "SoFi Stadium")
+game_days <- la_games |>
+  distinct(gameday) |>
+  mutate(game_day = 1)
+# Convert to Date type
+game_days$gameday <- as.Date(game_days$gameday)
+```
+
+```{r}
+# Loading DV Data Set
+la_data <- read_csv("Domestic_Violence_Calls_from_2020_to_Present_20250415.csv")
+la_data <- janitor::clean_names(la_data)
+domestic_violence <- la_data |> filter(grepl("INTIMATE", crm_cd_desc, ignore.case = TRUE))
+# Convert to Date by specifying format and removing time
+domestic_violence$date_occ <- 
+  as.Date(domestic_violence$date_occ, format = "%m/%d/%Y %I:%M:%S %p")
+```
+
+```{r}
+# Joining data sets
+dv_with_games <- domestic_violence |>
+  left_join(game_days, by = c("date_occ" = "gameday")) |>
+  mutate(game_day = ifelse(is.na(game_day), 0, game_day))
+# Creating data set of count of dv reports, grouped by date
+dv_daily <- domestic_violence |>
+  group_by(date_occ) |>
+  summarize(dv_reports = n())
+# Joining data set into our original big data set dv_with_games
+dv_with_games <- dv_with_games |>
+  group_by(date_occ) |>
+  mutate(dv_reports = n())
+```
+
+# Preliminary Model
+
+### Research Question
+
+Do NFL games at SoFi Stadium have a measurable effect on the frequency of reported domestic violence incidents in Los Angeles? The project is trying to explore whether the is a statistically significant and potentially predictable relationship between spikes in domestic violence cases and NFL game days.
+
+```{r}
+# Joined Data Set
+head(dv_with_games)
+```
+
+For our final project I plan to do these 3 methods, with possibly clustering if time permits.
+
+```{r}
+# Regression
+
+# Cross-Validation
+
+# Model Selection
+```
