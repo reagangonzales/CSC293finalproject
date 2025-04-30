@@ -1,0 +1,213 @@
+---
+title: "Clustering Movies by Style and Observing Trends Across Decades"
+author: "Reagan Gonzales & Abril Perez"
+format: pdf
+editor: visual
+---
+
+```{r include=FALSE}
+library(tidyverse)
+movies <- read_csv("imdb_movies.csv")
+```
+
+This report uses unsupervised learning, specifically KMeans clustering, to group movies based on features representing style (genre, score, budget, and revenue) and analyze how these style-based clusters have evolved over time.
+
+We analyzed a dataset of 10,178 movies from IMDb (found on kaggle) containing information on genres, release dates, IMDb scores, budgets, and revenues.
+
+Features selected for clustering:
+
+-   Numeric: budget_X, revenue, score
+
+-   Categorical: One-hot encoded genres (Action, Comedy, Family, etc)
+
+All numeric features were standardized prior to applying KMeans clustering. An elbow plot was used to determine the optimal number of clusters, and the elbow was most prominent at k = 4.
+
+Our ultimate goal with this project was to **identify distinct groups** (styles) of movies using clustering, and then to e**xamine how the distribution of movie styles changed overtime**.
+
+# Methods
+
+We first prepared the data set by one-hot encoding genre variables (Action = 1 if movie is action, 0 if not), binned release years into decades for easier analysis, and standardized numeric columns to ensure all values contributed equally to clustering.
+
+```{r include=FALSE}
+library(lubridate)
+
+# Ensure date is in proper format
+movies$date_x <- mdy(movies$date_x)
+movies$date_x <- as.Date(movies$date_x)
+
+# Extract year and decade
+movies <- movies |>
+  mutate(year = year(date_x),
+         decade = floor(year / 10) * 10)
+
+# Replace weird spaces and trim
+movies <- movies |>
+  mutate(genre_clean = str_replace_all(genre, "\u00a0", " "),
+         genre_clean = str_squish(genre_clean))
+```
+
+```{r include=FALSE}
+# Adding genre column indicators
+genre_indicators <- movies |>
+  select(names, genre_clean) |>
+  separate_rows(genre_clean, sep = ",\\s*") |>       # split on comma + space
+  distinct() |>
+  mutate(value = 1) |>
+  pivot_wider(names_from = genre_clean, values_from = value, values_fill = 0)
+movies_with_genres <- movies |>
+  left_join(genre_indicators, by = "names")
+```
+
+```{r include=FALSE}
+# Select numeric + genre columns
+cluster_data <- movies_with_genres |>
+  select(score, budget_x, revenue, Drama, Action, `Science Fiction`, Adventure, Animation, Family, Fantasy, Comedy, Thriller, Crime, Horror, Mystery, History, War, Documentary, Romance, Music, Western, `TV Movie`) |>
+  drop_na()  # remove any rows with missing values
+```
+
+```{r include=FALSE}
+# 2. Standardize numeric features
+cluster_data_scaled <- cluster_data |>
+  mutate(across(c(budget_x, revenue, score), scale))
+
+# 3. Apply KMeans clustering
+set.seed(123) # for reproducibility
+kmeans_result <- kmeans(cluster_data_scaled, centers = 4, nstart = 20)
+
+# 4. Attach cluster labels back to movies
+movies_with_clusters <- movies_with_genres |>
+  filter(!is.na(budget_x) & !is.na(revenue) & !is.na(score)) |>
+  mutate(cluster = kmeans_result$cluster)
+```
+
+```{r include=FALSE}
+## Elbow Method to choose K
+# 1. Create a vector to store WSS for different values of k
+wss <- vector()
+
+# 2. Loop over different k values
+for (k in 1:10) {
+  set.seed(123)
+  kmeans_model <- kmeans(cluster_data_scaled, centers = k, nstart = 20)
+  wss[k] <- kmeans_model$tot.withinss
+}
+
+# 3. Plot WSS versus k
+plot(1:10, wss, type = "b", 
+     xlab = "Number of Clusters (k)", 
+     ylab = "Total Within-Cluster Sum of Squares (WSS)",
+     main = "Elbow Method for Choosing k")
+```
+
+# Results
+
+The final clustering divided the movies into **four distinct groups**, each with different average characteristics:
+
+```{r echo=FALSE}
+movies_with_clusters |>
+  group_by(cluster) |>
+  summarize(
+    avg_budget = mean(budget_x, na.rm = TRUE),
+    avg_revenue = mean(revenue, na.rm = TRUE),
+    avg_score = mean(score, na.rm = TRUE),
+    count = n()
+  )
+```
+
+## Interpreting Clusters
+
+Cluster 1 has high budgets and very high revenue along with high scores. These can be interpreted as the successful big-budget films. They make back their cost many times over and are well-received critically.
+
+Cluster 2 has high budget but lower revenue, with bad scores. These can be interpreted as the big-budget flops. This seems to be the outlier cluster, as there is few movies (\~200) in this cluster.
+
+Cluster 3 has high budget and higher revenue , but not as much as cluster 1. Cluster 3 can be interpreted as commercial hits. These are financially successful films with moderate to high production value and decent reviews. Not quite as massive as Cluster 1, but still reliable performers.
+
+Cluster 4 has lower budget, moderate revenue, high scores, and the biggest count. These can be interpreted as the indie film crowd or lower-budget genre films. They're critically appreciated, make a profit, and form the largest group (over half the data set fell into this cluster). This is indication that lower budget "indie" films are most common in the film industry.
+
+```{r include=FALSE}
+cluster_colors <- c(
+  "1" = "#E69F00",  
+  "2" = "#56B4E9",  
+  "3" = "#009E73",  
+  "4" = "#CC79A7"   
+)
+```
+
+```{r echo = FALSE}
+movies_with_clusters |>
+  group_by(decade, cluster) |>
+  summarize(count = n(), .groups = "drop") |>
+  group_by(decade) |>
+  mutate(prop = count / sum(count)) |>
+  ggplot(aes(x = factor(decade), y = prop, fill = factor(cluster))) +
+  geom_col(position = "stack") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(values = cluster_colors, name = "Cluster") +
+  labs(
+    x = "Decade",
+    y = "Proportion of Movies",
+    fill = "Cluster",
+    title = "Proportion of Clusters by Decade"
+  ) +
+  theme_minimal()
+```
+
+This plot shows how the **number of movies in each cluster** changes **over time**, grouped by **decade**.
+
+This plot reveals that Cluster 4 (low-budget successes) consistently dominates in every decade, however we see see a sharp decrease in our current decade, along with a rise in Cluster 3 (commercial successes).
+
+Cluster 1 (blockbusters) grows steadily starting in the 1980s, reflecting the rise of franchise-driven studio filmmaking.
+
+Cluster 2 (flops) remains relatively rare but slightly increases in recent decades, possibly due to studios taking more financial risks.
+
+```{r include=FALSE}
+# Gather genre columns into long format
+genre_distribution <- movies_with_clusters |>
+  select(cluster, Drama:`TV Movie`) |>
+  pivot_longer(cols = -cluster, names_to = "genre", values_to = "present") |>
+  group_by(cluster, genre) |>
+  summarise(proportion = mean(present), .groups = "drop")
+
+# Reorder genres by total proportion across all clusters
+genre_order <- genre_distribution |>
+  group_by(genre) |>
+  summarise(total_prop = sum(proportion)) |>
+  arrange(desc(total_prop)) |>
+  pull(genre)
+
+# Set genre as a factor with levels in this new order
+genre_distribution$genre <- factor(genre_distribution$genre, levels = genre_order)
+```
+
+```{r echo=FALSE}
+# Plot
+genre_distribution |>
+  ggplot(aes(x = reorder(genre, proportion), y = proportion, fill = factor(cluster))) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ cluster, ncol = 2) +
+  scale_fill_manual(values = cluster_colors, guide = "none") +
+  labs(title = "Genre Proportions by Cluster",
+       x = "Genre", y = "Proportion") +
+  theme_minimal()
+```
+
+This plot breaks down **which genres are most common** in each cluster. I've attached a png of what the graph should look like (since it's not outputting correctly on this pdf)
+
+**Cluster 1** includes a high proportion of **Animation** and **Drama** films
+
+**Cluster 2** includes a high proportion of **Drama** and **Romance**
+
+**Cluster 3** includes a high proportion of **Drama**, **Comedy**, **Action**
+
+**Cluster 4** includes a high proportion of **Drama**, **Thriller**, **Comedy**, and **Action**
+
+# Conclusion
+
+This project used KMeans clustering to uncover four distinct styles of movies based on their genre, score, budget, and revenue. The results show how the film industry is seperated into high-budget blockbusters, low-budget indie successes, consistent commercial hits, and occasional big-budget flops. Over the decades, Cluster 4 (low-budget, high-score films) has dominated, however its proportion has **steadily declined since the 1980s**, and has dropped below 50% in our current decade, suggesting a relative decrease in the share of indie and lower-budget genre films in recent years. In contrast, **Cluster 3 (commercial hits)** and **Cluster 1 (blockbusters)** have **grown over time**, reflecting the industry’s increasing investment in mid-to-high budget productions with broad audience appeal. **Cluster 2 (big-budget flops)** remains a small but persistent presence, reminding us that even major investments don't always succeed.
+
+Genre trends offer a deeper look into what defines each cluster. While high-budget successes lean toward animated and action-packed genres, indie films thrive in drama and thriller spaces. Romance and drama dominate the flop cluster, indicating that not all genres translate well at scale.
+
+# Shout-outs
+
+I would like to share a really useful article I found that helped me make my visualizations more color-blind accessible! <https://www.datylon.com/blog/data-visualization-for-colorblind-readers>
