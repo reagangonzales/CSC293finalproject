@@ -10,7 +10,11 @@ library(tidyverse)
 movies <- read_csv("imdb_movies.csv")
 ```
 
-This report uses unsupervised learning, specifically KMeans clustering, to group movies based on features representing style (genre, score, budget, and revenue) and analyze how these style-based clusters have evolved over time.
+# Introduction
+
+This project explores how movies can be grouped based on characteristics like genre, budget, revenue, and score using unsupervised machine learning. Our objective was to uncover underlying “styles” of movies by applying KMeans clustering and to analyze how those styles have changed over time.
+
+# The Data
 
 We analyzed a dataset of 10,178 movies from IMDb (found on kaggle) containing information on genres, release dates, IMDb scores, budgets, and revenues.
 
@@ -20,13 +24,11 @@ Features selected for clustering:
 
 -   Categorical: One-hot encoded genres (Action, Comedy, Family, etc)
 
-All numeric features were standardized prior to applying KMeans clustering. An elbow plot was used to determine the optimal number of clusters, and the elbow was most prominent at k = 4.
-
 Our ultimate goal with this project was to **identify distinct groups** (styles) of movies using clustering, and then to e**xamine how the distribution of movie styles changed overtime**.
 
-# Methods
+# The Model
 
-We first prepared the data set by one-hot encoding genre variables (Action = 1 if movie is action, 0 if not), binned release years into decades for easier analysis, and standardized numeric columns to ensure all values contributed equally to clustering.
+The reason we chose KMeans clustering over hierarchical clustering is for the simple reason that our data set was so big every time we tried to run hierarchical clustering it crashed our RStudio. After further online research, we found a lot online that said hierarchical clustering was computationally heavy, so running it on a big data set seemed to not be possible, at least on our computers. Once we realized we would have to then use KMeans clustering, we wanted to see if there was a more optimal way to choose a value for k, since we weren't sure how many distinct groups we were going to see/wanted to see. After more online research, we came across the elbow method, which works by plotting the within-cluster sum of squares (WSS) against different values of k and looking for the point where the decrease in WSS starts to level off(forming an “elbow” shape). This point represents a good balance between model complexity and performance. In our case, the elbow appeared at **k = 4** (plot shown below), so we used that value for our KMeans model.
 
 ```{r include=FALSE}
 library(lubridate)
@@ -80,7 +82,7 @@ movies_with_clusters <- movies_with_genres |>
   mutate(cluster = kmeans_result$cluster)
 ```
 
-```{r include=FALSE}
+```{r echo=FALSE}
 ## Elbow Method to choose K
 # 1. Create a vector to store WSS for different values of k
 wss <- vector()
@@ -98,6 +100,8 @@ plot(1:10, wss, type = "b",
      ylab = "Total Within-Cluster Sum of Squares (WSS)",
      main = "Elbow Method for Choosing k")
 ```
+
+We then prepared the data set by one-hot encoding genre variables (Action = 1 if movie is action, 0 if not), organized release years into decades for easier analysis, and standardized numeric columns to ensure all values contributed equally to clustering. We then performed KMeans clustering.
 
 # Results
 
@@ -202,11 +206,15 @@ This plot breaks down **which genres are most common** in each cluster. I've att
 
 **Cluster 4** includes a high proportion of **Drama**, **Thriller**, **Comedy**, and **Action**
 
+# Limitations
+
+A big limitation in our model could be the simple fact that we could have used hierarchical clustering, possibly with better computer equipment or a non-RStudio application. Also, while not necessarily a limitation, we think accounting for streaming v theatrical releases post 2020 would have been an interesting column to add to the data set, as it would've been interesting to see the shifts between theatrical releases and streaming.
+
 # Conclusion
 
 This project used KMeans clustering to uncover four distinct styles of movies based on their genre, score, budget, and revenue. The results show how the film industry is seperated into high-budget blockbusters, low-budget indie successes, consistent commercial hits, and occasional big-budget flops. Over the decades, Cluster 4 (low-budget, high-score films) has dominated, however its proportion has **steadily declined since the 1980s**, and has dropped below 50% in our current decade, suggesting a relative decrease in the share of indie and lower-budget genre films in recent years. In contrast, **Cluster 3 (commercial hits)** and **Cluster 1 (blockbusters)** have **grown over time**, reflecting the industry’s increasing investment in mid-to-high budget productions with broad audience appeal. **Cluster 2 (big-budget flops)** remains a small but persistent presence, reminding us that even major investments don't always succeed.
 
-Genre trends offer a deeper look into what defines each cluster. While high-budget successes lean toward animated and action-packed genres, indie films thrive in drama and thriller spaces. Romance and drama dominate the flop cluster, indicating that not all genres translate well at scale.
+Genre trends offer a deeper look into what defines each cluster. While high-budget successes lean toward animated and action genres, indie films thrive in drama and thriller spaces. Romance and drama dominate the flop cluster, indicating that not all genres translate well in mainstream theaters.
 
 # Shout-outs
 
